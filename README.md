@@ -11,8 +11,12 @@ It provides a quick way to set a target for your reading session (e.g. read unti
 ### 1. Dialog with Progress & Quick Actions
 Tapping an active goal opens a minimalist dialog with quick action buttons
 
+![Goal Dialog](img/goal-1.png)
+
 ### 2. Bottom of Page Progress Display (Bottom Bar)
 When a goal is active, progress is displayed horizontally centered at the bottom of the screen:
+
+![Bottom Bar Progress](img/goal.png)
 
 ### 3. Consolidated Settings Menu
 All options are grouped under a single entry in Settings
