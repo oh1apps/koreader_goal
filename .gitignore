@@ -1,0 +1,4 @@
+# Reddit post draft and scratch files
+reddit_post*.txt
+*.tmp
+*.bak
