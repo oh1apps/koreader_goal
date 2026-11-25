@@ -408,8 +408,8 @@ function GoalPatch.showDialog(ui)
 
     local lines = {}
     if polish then
-        -- 1. Cel czytania: strona xx
-        table.insert(lines, string.format("Cel czytania: strona %d", goal_page))
+        -- 1. Cel: strona xx
+        table.insert(lines, string.format("Cel: strona %d", goal_page))
         -- 2. Do celu: 222 str. / 11:44 (lub minutowo)
         if diff > 0 then
             local pages_disp = GoalPatch.formatPagesShort(diff, true)
@@ -422,8 +422,8 @@ function GoalPatch.showDialog(ui)
             table.insert(lines, string.format("Do celu: osiągnięty (+%s)", GoalPatch.formatPagesShort(passed, true)))
         end
     else
-        -- 1. Reading goal: page xx
-        table.insert(lines, string.format("Reading goal: page %d", goal_page))
+        -- 1. Goal: page xx
+        table.insert(lines, string.format("Goal: page %d", goal_page))
         -- 2. To goal: 222 p. / 11:44 (lub minutowo)
         if diff > 0 then
             local pages_disp = GoalPatch.formatPagesShort(diff, false)
