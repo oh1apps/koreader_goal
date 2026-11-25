@@ -211,15 +211,6 @@ function GoalPatch.cycleIconStyle()
     return next_style
 end
 
--- Vertical height adjustment in pixels (default 0)
-function GoalPatch.getVOffset()
-    return G_reader_settings:readSetting("goal_v_offset", 0)
-end
-
-function GoalPatch.setVOffset(val)
-    G_reader_settings:saveSetting("goal_v_offset", tonumber(val) or 0)
-end
-
 -- =========================================================================
 -- Bottom Bar Display
 -- =========================================================================
@@ -318,8 +309,6 @@ function GoalPatch._paintBottomBarUnsafe(view, bb, x, y)
     local screen_width = Screen:getWidth()
     local screen_height = Screen:getHeight()
 
-    local v_offset = GoalPatch.getVOffset()
-
     local draw_x = math.floor((screen_width - widget_size.w) / 2)
     local draw_y
 
@@ -335,14 +324,14 @@ function GoalPatch._paintBottomBarUnsafe(view, bb, x, y)
 
     if footer_text_y then
         -- Exact baseline alignment with native status bar
-        draw_y = footer_text_y + v_offset
+        draw_y = footer_text_y
     else
         -- Fallback calculation if status bar is hidden
         local container_height = (view.footer and view.footer.height)
             or Screen:scaleBySize(footer_settings.container_height or G_defaults:readSetting("DMINIBAR_CONTAINER_HEIGHT") or 24)
         local bottom_padding = (view.footer and view.footer.bottom_padding)
             or Screen:scaleBySize(footer_settings.container_bottom_padding or 1)
-        draw_y = screen_height - bottom_padding - container_height + math.floor((container_height - widget_size.h) / 2) + v_offset
+        draw_y = screen_height - bottom_padding - container_height + math.floor((container_height - widget_size.h) / 2)
     end
 
     -- Clear background under text for maximum readability
@@ -896,63 +885,6 @@ function ReaderMenu:setUpdateItemTable()
                         end,
                         callback = function(touchmenu_instance)
                             GoalPatch.setIconStyle("crosshair")
-                            if touchmenu_instance then touchmenu_instance:updateItems() end
-                            if self.ui and self.ui.dialog then UIManager:setDirty(self.ui.dialog, "ui") else UIManager:setDirty(nil, "ui") end
-                        end,
-                    },
-                },
-            },
-            {
-                text_func = function()
-                    local off = GoalPatch.getVOffset()
-                    local pl = GoalPatch.isPolish()
-                    local off_str = (off == 0) and (pl and "0 px (dokładna linia)" or "0 px (exact line)")
-                        or string.format("%+d px", off)
-                    return pl and string.format("Korekta wysokości: %s", off_str)
-                        or string.format("Vertical adjustment: %s", off_str)
-                end,
-                sub_item_table = {
-                    {
-                        text = GoalPatch.isPolish() and "-2 px (wyżej)" or "-2 px (higher)",
-                        checked_func = function() return GoalPatch.getVOffset() == -2 end,
-                        callback = function(touchmenu_instance)
-                            GoalPatch.setVOffset(-2)
-                            if touchmenu_instance then touchmenu_instance:updateItems() end
-                            if self.ui and self.ui.dialog then UIManager:setDirty(self.ui.dialog, "ui") else UIManager:setDirty(nil, "ui") end
-                        end,
-                    },
-                    {
-                        text = GoalPatch.isPolish() and "-1 px (lekko wyżej)" or "-1 px (slightly higher)",
-                        checked_func = function() return GoalPatch.getVOffset() == -1 end,
-                        callback = function(touchmenu_instance)
-                            GoalPatch.setVOffset(-1)
-                            if touchmenu_instance then touchmenu_instance:updateItems() end
-                            if self.ui and self.ui.dialog then UIManager:setDirty(self.ui.dialog, "ui") else UIManager:setDirty(nil, "ui") end
-                        end,
-                    },
-                    {
-                        text = GoalPatch.isPolish() and "0 px (dokładna linia bazowa)" or "0 px (exact baseline)",
-                        checked_func = function() return GoalPatch.getVOffset() == 0 end,
-                        callback = function(touchmenu_instance)
-                            GoalPatch.setVOffset(0)
-                            if touchmenu_instance then touchmenu_instance:updateItems() end
-                            if self.ui and self.ui.dialog then UIManager:setDirty(self.ui.dialog, "ui") else UIManager:setDirty(nil, "ui") end
-                        end,
-                    },
-                    {
-                        text = GoalPatch.isPolish() and "+1 px (lekko niżej)" or "+1 px (slightly lower)",
-                        checked_func = function() return GoalPatch.getVOffset() == 1 end,
-                        callback = function(touchmenu_instance)
-                            GoalPatch.setVOffset(1)
-                            if touchmenu_instance then touchmenu_instance:updateItems() end
-                            if self.ui and self.ui.dialog then UIManager:setDirty(self.ui.dialog, "ui") else UIManager:setDirty(nil, "ui") end
-                        end,
-                    },
-                    {
-                        text = GoalPatch.isPolish() and "+2 px (niżej)" or "+2 px (lower)",
-                        checked_func = function() return GoalPatch.getVOffset() == 2 end,
-                        callback = function(touchmenu_instance)
-                            GoalPatch.setVOffset(2)
                             if touchmenu_instance then touchmenu_instance:updateItems() end
                             if self.ui and self.ui.dialog then UIManager:setDirty(self.ui.dialog, "ui") else UIManager:setDirty(nil, "ui") end
                         end,
