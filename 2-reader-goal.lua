@@ -1,39 +1,14 @@
 --[[--
-    Patch "Reading Goal" (Cel czytania) dla KOReader
-    Dodaje funkcjonalność wyznaczania i śledzenia celu czytania.
-    
-    Główne elementy:
-    1. Menu Tools (Narzędzia):
-       - Dokładnie jedna krótka pozycja "Goal".
-       - Kliknięcie: jeśli brak celu -> wyznacza cel na obecną stronę; jeśli cel istnieje -> otwiera okno dialogowe celu.
-    2. Okno dialogowe (ButtonDialog):
-       - Linijka 1: Cel czytania: strona xx (lub Reading goal: page xx)
-       - Linijka 2: Do celu: 222 str. / 11:44 (lub minutowo: 222 str. / 156 min.)
-       - Przyciski: [ Usuń cel ] [ Ustaw tu ] [ Idź do celu ]
-    3. Wyświetlanie postępu na środku na dole strony:
-       - Format: [Ikonka] 222 str. / 11:44 (lub minutowo / lub bez ikonki)
-       - Wyrównanie: idealnie dopasowane do linii bazowej i wysokości fabrycznego paska stanu (co do pojedynczego piksela).
-    4. Menu Ustawienia (Settings):
-       - DOKŁADNIE JEDNA wspólna pozycja "Cel czytania" (Reading goal), która grupuje w podmenu wszystkie opcje:
-         * Pokaż cel na dole strony (włącznik/wyłącznik z haczykiem)
-         * Format czasu (godziny i minuty 11:44 / tylko minuty 156 min.)
-         * Ikonka celu (Brak ikonki, Strzałka ↣, Chorągiewka ⚑, Kropka •, Tarcza NerdFont, Tarcza ◎, Celownik ⌖)
-         * Korekta wysokości w pionie (-2, -1, 0, +1, +2 px)
-    5. Dispatcher / Gesture Manager / Profile / Przyciski fizyczne:
-       - Wszystkie akcje oznaczone czytelnym prefiksem "Goal: ":
-         * Goal: Cel czytania / Reading goal
-         * Goal: O celu / About goal
-         * Goal: Usuń cel / Clear goal
-         * Goal: Ustaw na bieżącą stronę / Set to current page
-         * Goal: Przełącz cel na dole strony / Toggle on bottom of page
-         * Goal: Przełącz format czasu / Toggle time format
-         * Goal: Przełącz ikonkę celu / Cycle goal icon
-    6. API dla innych patchy i wtyczek (np. koreader_top_bar):
-       - _G.GoalPatch
-       - _G.ReadingGoal
-       - package.loaded["reading_goal"]
-       - self.ui.reading_goal
-       - self.ui:getReadingGoalStats()
+    "Reading Goal" patch for KOReader (2-reader-goal.lua)
+    Allows setting and tracking book reading goals and milestones.
+
+    Main features:
+    1. Tools Menu: single concise "Goal" item to set target or open stats.
+    2. Stats Dialog: 2-line overview ("Goal: page xx", "To goal: xx p. / xx:xx") with action buttons.
+    3. Bottom Bar: centered on-screen progress indicator aligned to native status bar baseline.
+    4. Consolidated Settings: single "Reading goal" menu under main Settings.
+    5. Dispatcher / Gesture Manager / Profiles / Hardware Keys integration.
+    6. Developer API exposed globally for other patches and plugins.
 --]]--
 
 local BD = require("ui/bidi")
@@ -56,7 +31,7 @@ local Screen = Device.screen
 
 local GoalPatch = {}
 
--- Wykrywanie języka interfejsu (język polski vs angielski/inny)
+-- Detect interface language (Polish vs English/other)
 function GoalPatch.isPolish()
     local lang = G_reader_settings and G_reader_settings:readSetting("language")
     if not lang or lang == "" then
@@ -65,7 +40,7 @@ function GoalPatch.isPolish()
     return lang:sub(1, 2) == "pl"
 end
 
--- Skrócony format liczby stron (np. "222 str." lub "222 p.")
+-- Short pages count formatting (e.g. "222 str." or "222 p.")
 function GoalPatch.formatPagesShort(n, polish)
     if polish then
         return string.format("%d str.", n)
@@ -74,7 +49,7 @@ function GoalPatch.formatPagesShort(n, polish)
     end
 end
 
--- Bezpieczne pobieranie bieżącej strony dokumentu
+-- Safely get the current document page number
 function GoalPatch.getCurrentPage(ui)
     if not ui then return 1 end
     if ui.getCurrentPage then
@@ -89,7 +64,7 @@ function GoalPatch.getCurrentPage(ui)
     return 1
 end
 
--- Bezpieczne pobieranie całkowitej liczby stron
+-- Safely get total document page count
 function GoalPatch.getTotalPages(ui)
     if ui and ui.document and ui.document.getPageCount then
         local ok, count = pcall(ui.document.getPageCount, ui.document)
@@ -100,7 +75,7 @@ function GoalPatch.getTotalPages(ui)
     return nil
 end
 
--- Odczyt zapisanego celu z metadanych książki (sidecar .sdr)
+-- Read saved goal from book metadata (.sdr sidecar)
 function GoalPatch.getGoal(ui)
     if ui and ui.doc_settings then
         return ui.doc_settings:readSetting("reading_goal")
@@ -108,7 +83,7 @@ function GoalPatch.getGoal(ui)
     return nil
 end
 
--- Zapisanie celu czytania w metadanych książki
+-- Save reading goal to book metadata
 function GoalPatch.setGoal(ui, page)
     if ui and ui.doc_settings then
         ui.doc_settings:saveSetting("reading_goal", page)
@@ -116,7 +91,7 @@ function GoalPatch.setGoal(ui, page)
     end
 end
 
--- Usunięcie celu czytania
+-- Remove reading goal
 function GoalPatch.clearGoal(ui)
     if not ui or not ui.doc_settings then return end
     if ui.doc_settings:readSetting("reading_goal") then
@@ -138,20 +113,20 @@ function GoalPatch.clearGoal(ui)
 end
 
 -- =========================================================================
--- Formatowanie czasu do celu: "11:44" (godziny:minuty) lub "156 min."
+-- Format time to goal: "11:44" (hours:minutes) or "156 min."
 -- =========================================================================
 
--- Pobranie wybranego formatu czasu ("clock" lub "minutes", domyślnie "clock")
+-- Get selected time format ("clock" or "minutes", default "clock")
 function GoalPatch.getTimeFormat()
     return G_reader_settings:readSetting("goal_time_format", "clock")
 end
 
--- Zmiana formatu czasu
+-- Set time format
 function GoalPatch.setTimeFormat(format)
     G_reader_settings:saveSetting("goal_time_format", format)
 end
 
--- Przełączenie formatu czasu między "clock" a "minutes"
+-- Cycle time format between "clock" and "minutes"
 function GoalPatch.cycleTimeFormat()
     local current = GoalPatch.getTimeFormat()
     local new_fmt = (current == "clock") and "minutes" or "clock"
@@ -159,7 +134,7 @@ function GoalPatch.cycleTimeFormat()
     return new_fmt
 end
 
--- Formatowanie czasu do celu
+-- Format time remaining to goal
 function GoalPatch.formatTimeToGoal(ui, pages, polish)
     local fmt = GoalPatch.getTimeFormat()
     if not pages or pages <= 0 then
@@ -182,7 +157,7 @@ function GoalPatch.formatTimeToGoal(ui, pages, polish)
         end
     end
 
-    -- Fallback jeśli statystyki średniego czasu czytania nie są jeszcze zebrane
+    -- Fallback if average reading time statistics are not yet available
     if fmt == "minutes" then
         return "-- min."
     else
@@ -191,7 +166,7 @@ function GoalPatch.formatTimeToGoal(ui, pages, polish)
 end
 
 -- =========================================================================
--- Wybór ikonki celu (Brak, Strzałka ↣, Chorągiewka ⚑, Kropka •, NerdFont, ◎, ⌖)
+-- Goal icon selection (None, Arrow ↣, Flag ⚑, Bullet •, NerdFont, ◎, ⌖)
 -- =========================================================================
 function GoalPatch.getIconStyle()
     return G_reader_settings:readSetting("goal_icon_style", "arrow")
@@ -236,7 +211,7 @@ function GoalPatch.cycleIconStyle()
     return next_style
 end
 
--- Korekta wysokości w pionie (piksele, domyślnie 0)
+-- Vertical height adjustment in pixels (default 0)
 function GoalPatch.getVOffset()
     return G_reader_settings:readSetting("goal_v_offset", 0)
 end
@@ -246,22 +221,22 @@ function GoalPatch.setVOffset(val)
 end
 
 -- =========================================================================
--- Wyświetlanie na dole strony (Bottom Bar)
+-- Bottom Bar Display
 -- =========================================================================
 
--- Czy wyświetlanie na dole strony jest włączone w ustawieniach (domyślnie włączone)
+-- Check if bottom bar display is enabled in settings (default true)
 function GoalPatch.isBottomBarEnabled()
     return G_reader_settings:nilOrTrue("goal_bottom_bar_enabled")
 end
 
--- Przełączenie wyświetlania na dole strony
+-- Toggle bottom bar display
 function GoalPatch.toggleBottomBar()
     local current = GoalPatch.isBottomBarEnabled()
     G_reader_settings:saveSetting("goal_bottom_bar_enabled", not current)
     return not current
 end
 
--- Formatowanie tekstu paska dolnego: np. "↣ 222 str. / 11:44" lub "222 str. / 11:44"
+-- Format bottom bar text: e.g. "↣ 222 str. / 11:44" or "222 p. / 11:44"
 function GoalPatch.getBottomBarText(ui, current_page, goal_page)
     current_page = current_page or GoalPatch.getCurrentPage(ui)
     goal_page = goal_page or GoalPatch.getGoal(ui)
@@ -286,7 +261,7 @@ function GoalPatch.getBottomBarText(ui, current_page, goal_page)
     return text
 end
 
--- Bezpieczne rysowanie informacji o celu na dole strony
+-- Safely paint goal progress at the bottom of the page
 function GoalPatch._paintBottomBarUnsafe(view, bb, x, y)
     if not GoalPatch.isBottomBarEnabled() then return end
     if not view or not view.ui or not view.ui.document then return end
@@ -299,7 +274,7 @@ function GoalPatch._paintBottomBarUnsafe(view, bb, x, y)
     local text = GoalPatch.getBottomBarText(ui, current_page, goal_page)
     if not text or text == "" then return end
 
-    -- Pobranie parametrów z fabrycznego paska stanu (font, rozmiar, pogrubienie, margines)
+    -- Retrieve parameters from native status bar (font, size, bold weight, margins)
     local footer_settings = G_reader_settings:readSetting("footer") or {}
     local font_face_file = footer_settings.text_font_face or "./fonts/noto/NotoSans-Regular.ttf"
     local font_face_index = footer_settings.text_font_face_index or 0
@@ -327,7 +302,7 @@ function GoalPatch._paintBottomBarUnsafe(view, bb, x, y)
     local is_night = G_reader_settings:isTrue("night_mode")
     local fg_color = is_night and Blitbuffer.COLOR_WHITE or Blitbuffer.COLOR_BLACK
 
-    -- Używamy dokładnie takiego samego paddingu jak w footer_text, aby metryki linii i bazowa wysokość były identyczne
+    -- Use the exact same padding as footer_text so metrics and baseline match perfectly
     local padding = (view.footer and view.footer.footer_text and view.footer.footer_text.padding)
         or Size.padding.small
 
@@ -348,7 +323,7 @@ function GoalPatch._paintBottomBarUnsafe(view, bb, x, y)
     local draw_x = math.floor((screen_width - widget_size.w) / 2)
     local draw_y
 
-    -- Pobieramy dokładną pozycję kontenera tekstu paska stanu (jeśli jest widoczny)
+    -- Get the exact screen Y coordinate of status bar text container (if visible)
     local footer_text_y = nil
     if view.footer and view.footer_visible then
         if view.footer.text_container and view.footer.text_container.dimen and view.footer.text_container.dimen.y and view.footer.text_container.dimen.y > 0 then
@@ -359,9 +334,10 @@ function GoalPatch._paintBottomBarUnsafe(view, bb, x, y)
     end
 
     if footer_text_y then
-        -- Idealne zrównanie linii bazowej tekstu z fabrycznym paskiem stanu
+        -- Exact baseline alignment with native status bar
         draw_y = footer_text_y + v_offset
     else
+        -- Fallback calculation if status bar is hidden
         local container_height = (view.footer and view.footer.height)
             or Screen:scaleBySize(footer_settings.container_height or G_defaults:readSetting("DMINIBAR_CONTAINER_HEIGHT") or 24)
         local bottom_padding = (view.footer and view.footer.bottom_padding)
@@ -369,7 +345,7 @@ function GoalPatch._paintBottomBarUnsafe(view, bb, x, y)
         draw_y = screen_height - bottom_padding - container_height + math.floor((container_height - widget_size.h) / 2) + v_offset
     end
 
-    -- Oczyszczenie tła pod napisem dla zapewnienia pełnej czytelności
+    -- Clear background under text for maximum readability
     local bg_color = view.outer_page_color or (is_night and Blitbuffer.COLOR_BLACK or Blitbuffer.COLOR_WHITE)
     local pad_x = Screen:scaleBySize(4)
     local pad_y = Screen:scaleBySize(1)
@@ -379,7 +355,7 @@ function GoalPatch._paintBottomBarUnsafe(view, bb, x, y)
     text_widget:free()
 end
 
--- Główna metoda paintBottomBar z zabezpieczeniem pcall
+-- Main paintBottomBar entry point wrapped in pcall
 function GoalPatch.paintBottomBar(view, bb, x, y)
     local ok, err = pcall(GoalPatch._paintBottomBarUnsafe, view, bb, x, y)
     if not ok then
@@ -387,7 +363,7 @@ function GoalPatch.paintBottomBar(view, bb, x, y)
     end
 end
 
--- Przechwycenie ReaderView.paintTo
+-- Hook ReaderView.paintTo
 local orig_ReaderView_paintTo = ReaderView.paintTo
 ReaderView.paintTo = function(self, bb, x, y)
     orig_ReaderView_paintTo(self, bb, x, y)
@@ -395,7 +371,7 @@ ReaderView.paintTo = function(self, bb, x, y)
 end
 
 -- =========================================================================
--- Okno dialogowe szczegółów celu (ButtonDialog)
+-- Goal Details Dialog (ButtonDialog)
 -- =========================================================================
 function GoalPatch.showDialog(ui)
     if not ui or not ui.doc_settings then return end
@@ -424,7 +400,7 @@ function GoalPatch.showDialog(ui)
     else
         -- 1. Goal: page xx
         table.insert(lines, string.format("Goal: page %d", goal_page))
-        -- 2. To goal: 222 p. / 11:44 (lub minutowo)
+        -- 2. To goal: 222 p. / 11:44 (or in minutes)
         if diff > 0 then
             local pages_disp = GoalPatch.formatPagesShort(diff, false)
             local time_disp = GoalPatch.formatTimeToGoal(ui, diff, false)
@@ -473,7 +449,7 @@ function GoalPatch.showDialog(ui)
     UIManager:show(dialog)
 end
 
--- Ustawienie bieżącej strony jako celu czytania
+-- Set current page as reading goal
 function GoalPatch.setGoalToCurrent(ui)
     if not ui or not ui.doc_settings then return end
     local curr = GoalPatch.getCurrentPage(ui)
@@ -491,7 +467,7 @@ function GoalPatch.setGoalToCurrent(ui)
     end
 end
 
--- Główny wyzwalacz akcji Goal (z menu lub gestu)
+-- Main Goal action trigger (from menu or gesture)
 function GoalPatch.trigger(ui)
     if not ui or not ui.doc_settings then
         UIManager:show(Notification:new{
@@ -509,7 +485,7 @@ function GoalPatch.trigger(ui)
     end
 end
 
--- Statystyki celu udostępniane dla innych komponentów
+-- Goal statistics exposed to other components and plugins
 function GoalPatch.getStats(ui)
     ui = ui or (ReaderUI and ReaderUI.instance)
     if not ui then return nil end
@@ -534,7 +510,7 @@ function GoalPatch.getStats(ui)
 end
 
 -- =========================================================================
--- Integracja z ReaderUI: obsługa zdarzeń z Dispatchera / Gestów / Skrótów
+-- ReaderUI integration: handle events from Dispatcher / Gestures / Shortcuts
 -- =========================================================================
 function ReaderUI:onReadingGoal()
     GoalPatch.trigger(self)
@@ -587,7 +563,7 @@ function ReaderUI:onCycleGoalIcon()
     return true
 end
 
--- Metody publiczne na obiekcie ui
+-- Public methods on ReaderUI instance
 function ReaderUI:getReadingGoal()
     return GoalPatch.getGoal(self)
 end
@@ -603,19 +579,19 @@ function ReaderUI:init()
 end
 
 -- =========================================================================
--- Rejestracja w globalnym środowisku (_G oraz package.loaded)
+-- Register in global environment (_G and package.loaded)
 -- =========================================================================
 _G.GoalPatch = GoalPatch
 _G.ReadingGoal = GoalPatch
 package.loaded["reading_goal"] = GoalPatch
 
 -- =========================================================================
--- Rejestracja w Dispatcherze (Gesture Manager, Profile czytania, Keybindings)
+-- Register in Dispatcher (Gesture Manager, Reading Profiles, Keybindings)
 -- =========================================================================
 if Dispatcher and Dispatcher.registerAction then
     local pl = GoalPatch.isPolish()
 
-    -- Oczyszczenie wcześniejszych rejestracji
+    -- Clear previous action registrations
     if Dispatcher.removeAction then
         Dispatcher:removeAction("show_reading_goal")
         Dispatcher:removeAction("reading_goal")
@@ -627,7 +603,7 @@ if Dispatcher and Dispatcher.registerAction then
         Dispatcher:removeAction("cycle_goal_icon")
     end
 
-    -- 1. Cel czytania
+    -- 1. Reading goal
     Dispatcher:registerAction("reading_goal", {
         category = "none",
         event = "ReadingGoal",
@@ -635,7 +611,7 @@ if Dispatcher and Dispatcher.registerAction then
         reader = true,
     })
 
-    -- 2. O celu
+    -- 2. About goal
     Dispatcher:registerAction("about_reading_goal", {
         category = "none",
         event = "ShowReadingGoal",
@@ -643,7 +619,7 @@ if Dispatcher and Dispatcher.registerAction then
         reader = true,
     })
 
-    -- 3. Usuń cel
+    -- 3. Clear goal
     Dispatcher:registerAction("clear_reading_goal", {
         category = "none",
         event = "ClearReadingGoal",
@@ -651,7 +627,7 @@ if Dispatcher and Dispatcher.registerAction then
         reader = true,
     })
 
-    -- 4. Ustaw na bieżącą stronę
+    -- 4. Set to current page
     Dispatcher:registerAction("set_reading_goal", {
         category = "none",
         event = "SetReadingGoal",
@@ -659,7 +635,7 @@ if Dispatcher and Dispatcher.registerAction then
         reader = true,
     })
 
-    -- 5. Przełącz cel na dole strony
+    -- 5. Toggle on bottom of page
     Dispatcher:registerAction("toggle_goal_bottom_bar", {
         category = "none",
         event = "ToggleGoalBottomBar",
@@ -667,7 +643,7 @@ if Dispatcher and Dispatcher.registerAction then
         reader = true,
     })
 
-    -- 6. Przełącz format czasu
+    -- 6. Toggle time format
     Dispatcher:registerAction("cycle_goal_time_format", {
         category = "none",
         event = "CycleGoalTimeFormat",
@@ -675,7 +651,7 @@ if Dispatcher and Dispatcher.registerAction then
         reader = true,
     })
 
-    -- 7. Przełącz ikonkę celu
+    -- 7. Cycle goal icon
     Dispatcher:registerAction("cycle_goal_icon", {
         category = "none",
         event = "CycleGoalIcon",
@@ -685,14 +661,14 @@ if Dispatcher and Dispatcher.registerAction then
 end
 
 -- =========================================================================
--- Przechwycenie ReaderMenu:setUpdateItemTable (Menu Tools + Jedno Menu Ustawień)
+-- Hook ReaderMenu:setUpdateItemTable (Tools Menu + Consolidated Settings)
 -- =========================================================================
 local orig_ReaderMenu_setUpdateItemTable = ReaderMenu.setUpdateItemTable
 
 function ReaderMenu:setUpdateItemTable()
     local menu_order = require("ui/elements/reader_menu_order")
     if menu_order then
-        -- Usunięcie wszelkich starych wpisów celu z menu "navi"
+        -- Remove any legacy goal entries from "navi" menu
         if menu_order.navi then
             for i = #menu_order.navi, 1, -1 do
                 local v = menu_order.navi[i]
@@ -702,7 +678,7 @@ function ReaderMenu:setUpdateItemTable()
             end
         end
 
-        -- 1. W menu "tools" (Narzędzia) -> dokładnie jedna pozycja "Goal"
+        -- 1. In "tools" menu -> single "Goal" entry
         if menu_order.tools then
             for i = #menu_order.tools, 1, -1 do
                 local v = menu_order.tools[i]
@@ -733,7 +709,7 @@ function ReaderMenu:setUpdateItemTable()
             end
         end
 
-        -- 2. W menu "setting" (Ustawienia) -> DOKŁADNIE JEDNA pozycja "goal_settings"
+        -- 2. In "setting" menu -> EXACTLY ONE "goal_settings" entry
         if menu_order.setting then
             for i = #menu_order.setting, 1, -1 do
                 local v = menu_order.setting[i]
@@ -757,7 +733,7 @@ function ReaderMenu:setUpdateItemTable()
         end
     end
 
-    -- W menu Tools: krótka nazwa "Goal"
+    -- In Tools menu: concise "Goal" label
     self.menu_items.reading_goal = {
         text = "Goal",
         callback = function(touchmenu_instance)
@@ -765,7 +741,7 @@ function ReaderMenu:setUpdateItemTable()
         end,
     }
 
-    -- W menu Ustawienia: JEDNA wspólna pozycja ze wszystkimi opcjami w podmenu
+    -- In Settings menu: CONSOLIDATED submenu with all settings
     self.menu_items.goal_settings = {
         text = GoalPatch.isPolish() and "Cel czytania" or "Reading goal",
         sub_item_table = {
@@ -834,11 +810,11 @@ function ReaderMenu:setUpdateItemTable()
                     local style = GoalPatch.getIconStyle()
                     local pl = GoalPatch.isPolish()
                     local names = {
-                        none = pl and "Brak ikonki" or "No icon",
+                        none = pl and "Brak" or "None",
                         arrow = pl and "Strzałka (↣)" or "Arrow (↣)",
                         flag = pl and "Chorągiewka (⚑)" or "Flag (⚑)",
                         bullet = pl and "Kropka (•)" or "Bullet (•)",
-                        nerd_bullseye = pl and "Tarcza NerdFont" or "NerdFont Bullseye",
+                        nerd_bullseye = pl and "Tarcza NerdFont (\u{F140})" or "NerdFont Bullseye (\u{F140})",
                         bullseye = pl and "Tarcza (◎)" or "Bullseye (◎)",
                         crosshair = pl and "Celownik (⌖)" or "Crosshair (⌖)",
                     }
@@ -848,7 +824,7 @@ function ReaderMenu:setUpdateItemTable()
                 end,
                 sub_item_table = {
                     {
-                        text = GoalPatch.isPolish() and "Brak ikonki (samo 222 str. / 11:44)" or "No icon (222 p. / 11:44 only)",
+                        text = GoalPatch.isPolish() and "Brak" or "None",
                         checked_func = function()
                             return GoalPatch.getIconStyle() == "none"
                         end,
@@ -859,7 +835,7 @@ function ReaderMenu:setUpdateItemTable()
                         end,
                     },
                     {
-                        text = GoalPatch.isPolish() and "Strzałka (↣) - styl KOReadera" or "Arrow (↣) - KOReader style",
+                        text = GoalPatch.isPolish() and "Strzałka (↣)" or "Arrow (↣)",
                         checked_func = function()
                             return GoalPatch.getIconStyle() == "arrow"
                         end,
@@ -892,7 +868,7 @@ function ReaderMenu:setUpdateItemTable()
                         end,
                     },
                     {
-                        text = GoalPatch.isPolish() and "Tarcza NerdFont (mała)" or "NerdFont Bullseye (small)",
+                        text = GoalPatch.isPolish() and "Tarcza NerdFont (\u{F140})" or "NerdFont Bullseye (\u{F140})",
                         checked_func = function()
                             return GoalPatch.getIconStyle() == "nerd_bullseye"
                         end,
